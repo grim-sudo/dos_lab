@@ -1,0 +1,86 @@
+networks:
+  lab_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+volumes:
+  pgdata:
+
+services:
+  # ── PostgreSQL database ────────────────────────────────────────────────────
+  db:
+    image: postgres:15-bookworm
+    container_name: dos_lab_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: trackshop
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      lab_net:
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d trackshop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Intentionally low shared_buffers to increase query load visibility
+    command: >
+      postgres
+        -c shared_buffers=32MB
+        -c max_connections=100
+        -c work_mem=2MB
+
+  # ── Node.js backend API ────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dos_lab_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://appuser:apppassword@172.28.0.10:5432/trackshop
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      lab_net:
+        ipv4_address: 172.28.0.20
+    # ── Intentional SYN flood susceptibility ──────────────────────────────
+    # Disable SYN cookies and lower the SYN backlog so half-open connection
+    # exhaustion is observable during the TCP lab exercise.
+    sysctls:
+      - net.ipv4.tcp_syncookies=0
+      - net.ipv4.tcp_max_syn_backlog=128
+      - net.ipv4.tcp_synack_retries=2
+    # Allow ICMP traffic through — needed for ICMP flood demo
+    cap_add:
+      - NET_ADMIN
+
+  # ── Nginx reverse proxy / frontend server ─────────────────────────────────
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: dos_lab_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      lab_net:
+        ipv4_address: 172.28.0.30
+    # Keep worker connections low so HTTP flood impact is visible
+    sysctls:
+      - net.ipv4.tcp_syncookies=0
+      - net.ipv4.tcp_max_syn_backlog=128
+    cap_add:
+      - NET_ADMIN
