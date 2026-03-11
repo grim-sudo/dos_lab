@@ -28,7 +28,7 @@ You are a junior security analyst at a fictional company. The DevOps team has de
 Your assessment must cover three threat categories:
 
 1. **Network-level volumetric attack** — can the server be overwhelmed at the ICMP layer?
-2. **Transport-level connection exhaustion** — can the TCP handshake backlog be saturated?
+2. **Service-level DNS flood** — can the DNS resolver be overwhelmed by query flooding?
 3. **Application-level resource exhaustion** — can specific API endpoints be flooded to degrade or crash the service?
 
 For each attack you must:
@@ -49,7 +49,7 @@ Your assigned target IP will be shown on the TrackShop dashboard when you open t
 │ Attacker Machine (Kali Linux)               │
 │  Tools: hping3 · Metasploit · wrk           │
 └────────────────┬────────────────────────────┘
-                 │  attack traffic → pod IP : 80
+                 │  attack traffic → pod IP : 80 / 53
 ┌────────────────▼────────────────────────────┐
 │              Lab Host (Docker)              │
 │  ┌──────────────────────────────────────┐   │
@@ -64,6 +64,10 @@ Your assigned target IP will be shown on the TrackShop dashboard when you open t
 │  ┌──────────────▼───────────────────────┐   │
 │  │  PostgreSQL DB    172.28.0.10        │   │
 │  └──────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────┐   │
+│  │  dnsmasq DNS  172.28.0.40 : 53/udp   │   │
+│  │  (intentionally misconfigured)       │   │
+│  └──────────────────────────────────────┘   │
 └─────────────────────────────────────────────┘
 ```
 
@@ -72,7 +76,7 @@ Your assigned target IP will be shown on the TrackShop dashboard when you open t
 | Layer | Protocol | Weakness |
 |-------|----------|----------|
 | Network (L3) | ICMP | No ICMP rate limit or firewall rule — ping flood consumes CPU interrupts and bandwidth |
-| Transport (L4) | TCP | `tcp_syncookies=0`, backlog=128 — SYN flood exhausts half-open connection queue |
+| Service (DNS/UDP) | UDP | dnsmasq has `cache-size=0`, `dns-forward-max=500`, and large TXT records — every query is freshly computed with no rate limiting |
 | Application (L7) | HTTP | No rate limiting; endpoints run full table scans, 3-query report generation with CPU spin, and N+1 DB queries |
 
 ### Vulnerable Endpoints
@@ -87,7 +91,7 @@ Your assigned target IP will be shown on the TrackShop dashboard when you open t
 ### What Students Observe
 
 - **ICMP flood** → CPU spikes in `docker stats`, increased ping RTT.
-- **SYN flood** → `ss -ant | grep SYN_RECV` fills to 128 (backlog limit), legitimate connections time out.
+- **DNS flood** → `dig @<target> trackshop.local` times out; dnsmasq CPU saturates; DNS resolution unavailable.
 - **HTTP flood** → `wrk` latency climbs from ~50 ms to several seconds; PostgreSQL CPU saturates; backend returns 500 / 502 errors.
 
 ---
@@ -96,15 +100,37 @@ Your assigned target IP will be shown on the TrackShop dashboard when you open t
 
 > Students do not need to run these commands. The instructor provisions the lab host.
 
-```bash
-# Clone / enter the project directory
-cd dos_lab
+### Option A — Single container (recommended)
 
-# Install node modules in both fronted and backend folders
-cd dos_lab/frontend
-npm i
-cd ../backend
-npm i
+```bash
+# Build once
+docker build -t dos-lab .
+
+# Run
+docker run -p 80:80 --name dos dos-lab:latest
+
+# Verify web
+curl http://localhost/api/health
+# Verify DNS (use the container IP shown on the TrackShop dashboard)
+dig @<container-ip> trackshop.local
+```
+
+The application is immediately available at **http://\<host-ip\>**. The dnsmasq DNS service runs on port 53 inside the container and is reachable at the container IP displayed on the TrackShop dashboard — no separate port mapping required.
+
+To reset the lab (wipes the database and starts fresh):
+
+```bash
+docker rm -f dos && docker run -p 80:80 --name dos dos-lab:latest
+```
+
+> `start.sh` is also provided as a convenience wrapper that handles build
+> detection and removes any existing container automatically.
+
+### Option B — Docker Compose (multi-container)
+
+```bash
+# Install node modules in both frontend and backend
+cd frontend && npm i && cd ../backend && npm i && cd ..
 
 # Build images and start all containers
 docker compose up --build -d
@@ -114,9 +140,7 @@ docker compose ps
 curl http://localhost/api/health
 ```
 
-The application is immediately available at **http://\<host-ip\>**.
-
-To reset the lab (wipes the database):
+To reset:
 
 ```bash
 docker compose down -v && docker compose up -d

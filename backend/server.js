@@ -62,6 +62,18 @@ app.get("/api/products", async (_req, res) => {
   }
 });
 
+// ── Container IP (lab target banner) ────────────────────────────────────────
+app.get("/api/target-ip", (_req, res) => {
+  const nets = require("os").networkInterfaces();
+  let ip = "127.0.0.1";
+  outer: for (const iface of Object.values(nets)) {
+    for (const addr of (iface ?? [])) {
+      if (addr.family === "IPv4" && !addr.internal) { ip = addr.address; break outer; }
+    }
+  }
+  res.json({ ip, port: 80 });
+});
+
 // ── 404 fallback ──────────────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 

@@ -42,32 +42,32 @@ Answer all questions before consulting `Solutions.md`.
 
 ---
 
-## Section 2 — Transport Layer (TCP)
+## Section 2 — Service Layer (DNS)
 
-**Q5.** During a SYN flood attack, what is the state of the connections that accumulate in the server's backlog?
+**Q5.** Which transport protocol do DNS queries primarily use?
 
-- A) ESTABLISHED
-- **B) SYN_RECV (half-open)**
-- C) TIME_WAIT
-- D) CLOSE_WAIT
-
----
-
-**Q6.** SYN cookies are a defence against SYN floods because they:
-
-- **A) Allow the server to avoid allocating state until the handshake completes**
-- B) Drop all incoming SYN packets immediately
-- C) Increase the size of the TCP receive window
-- D) Encrypt the SYN-ACK segment
+- A) TCP
+- **B) UDP**
+- C) ICMP
+- D) TLS
 
 ---
 
-**Q7.** In this lab, which `sysctl` setting is disabled to make the server susceptible to SYN floods?
+**Q6.** When a DNS server is flooded with thousands of queries per second, what happens to legitimate clients?
 
-- A) `net.ipv4.ip_forward`
-- B) `net.ipv4.tcp_rmem`
-- **C) `net.ipv4.tcp_syncookies`**
-- D) `net.core.somaxconn`
+- A) The DNS server upgrades to TCP automatically
+- B) Clients receive incorrect IP addresses
+- C) The DNS server restarts and clears its cache
+- **D) DNS queries time out and domain names cannot be resolved**
+
+---
+
+**Q7.** Disabling dnsmasq's cache (`cache-size=0`) makes it more vulnerable to a flood attack because:
+
+- **A) Every DNS query must be freshly computed, multiplying CPU and I/O load per request**
+- B) The server can no longer forward queries to upstream resolvers
+- C) UDP packets become larger, consuming more bandwidth
+- D) The DNS server stops listening on port 53
 
 ---
 

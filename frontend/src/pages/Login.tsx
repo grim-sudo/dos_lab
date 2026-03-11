@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [status,   setStatus]   = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [status,   setStatus]   = useState<"idle" | "loading" | "error">("idle");
   const [message,  setMessage]  = useState("");
+  const navigate = useNavigate();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -20,8 +22,11 @@ export default function Login() {
       const data = await res.json();
 
       if (res.ok) {
-        setStatus("ok");
-        setMessage(`Welcome, ${data.user.username}! (role: ${data.user.role})`);
+        localStorage.setItem("trackshop_auth", JSON.stringify({
+          token: data.token,
+          user:  data.user,
+        }));
+        navigate("/", { replace: true });
       } else {
         setStatus("error");
         setMessage(data.error ?? "Login failed");
@@ -44,7 +49,6 @@ export default function Login() {
         </div>
 
         <div className="card">
-          {status === "ok"    && <div className="alert alert-success">{message}</div>}
           {status === "error" && <div className="alert alert-error">{message}</div>}
           {status === "idle"  && (
             <div className="alert alert-info" style={{ marginBottom: "1rem" }}>

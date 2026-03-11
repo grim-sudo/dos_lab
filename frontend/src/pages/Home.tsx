@@ -30,10 +30,16 @@ export default function Home() {
   const [recent, setRecent] = useState<RecentOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Derive the target IP/hostname from wherever the browser reached this page.
-  // Students can use this value directly in hping3 / Metasploit / wrk commands.
-  const targetHost = window.location.hostname;
-  const targetPort = window.location.port || "80";
+  // Fetch the container's actual bridge IP from the backend so students always
+  // see the correct attack target — even when the page is accessed via localhost.
+  const [targetIP, setTargetIP] = useState<string>(window.location.hostname);
+
+  useEffect(() => {
+    fetch("/api/target-ip")
+      .then(r => r.json())
+      .then(d => { if (d.ip) setTargetIP(d.ip); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // Fetch summary stats + recent orders
@@ -86,9 +92,9 @@ export default function Home() {
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
             <code style={{ fontSize: "1.3rem", fontWeight: 700, color: "#38bdf8",
               fontFamily: "monospace", letterSpacing: ".04em" }}>
-              {targetHost}
+              {targetIP}
             </code>
-            <span style={{ fontSize: ".8rem", color: "#64748b" }}>port {targetPort}</span>
+            <span style={{ fontSize: ".8rem", color: "#64748b" }}>port 80</span>
           </div>
         </div>
       </div>
